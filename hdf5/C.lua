@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- HDF5 for Lua.
--- Copyright © 2013 Peter Colberg.
--- For conditions of distribution and use, see copyright notice in LICENSE.
+-- Copyright © 2013–2014 Peter Colberg.
+-- Distributed under the MIT license. (See accompanying file LICENSE.)
 ------------------------------------------------------------------------------
 
 local ffi = require("ffi")
@@ -15,7 +15,7 @@ typedef long long int hssize_t;
 typedef uint64_t haddr_t;
 static const int H5_VERS_MAJOR = 1;
 static const int H5_VERS_MINOR = 8;
-static const int H5_VERS_RELEASE = 12;
+static const int H5_VERS_RELEASE = 13;
 static const int H5P_DEFAULT = 0;
 typedef enum H5_iter_order_t H5_iter_order_t;
 enum H5_iter_order_t {
@@ -47,6 +47,7 @@ herr_t H5garbage_collect(void);
 herr_t H5set_free_list_limits(int, int, int, int, int, int);
 herr_t H5get_libversion(unsigned int *, unsigned int *, unsigned int *);
 herr_t H5check_version(unsigned int, unsigned int, unsigned int);
+herr_t H5free_memory(void *);
 typedef int hid_t;
 static const int H5I_INVALID_HID = -1;
 typedef enum H5I_type_t H5I_type_t;
@@ -1342,6 +1343,8 @@ typedef struct {
 } H5FD_file_image_callbacks_t;
 herr_t H5Pset_file_image_callbacks(hid_t, H5FD_file_image_callbacks_t *);
 herr_t H5Pget_file_image_callbacks(hid_t, H5FD_file_image_callbacks_t *);
+herr_t H5Pset_core_write_tracking(hid_t, hbool_t, size_t);
+herr_t H5Pget_core_write_tracking(hid_t, hbool_t *, size_t *);
 herr_t H5Pset_layout(hid_t, H5D_layout_t);
 H5D_layout_t H5Pget_layout(hid_t);
 herr_t H5Pset_chunk(hid_t, int, const hsize_t *);
@@ -1410,6 +1413,8 @@ herr_t H5Padd_merge_committed_dtype_path(hid_t, const char *);
 herr_t H5Pfree_merge_committed_dtype_paths(hid_t);
 herr_t H5Pset_mcdt_search_cb(hid_t, H5O_mcdt_search_cb_t, void *);
 herr_t H5Pget_mcdt_search_cb(hid_t, H5O_mcdt_search_cb_t *, void **);
+herr_t H5Pset_fapl_core(hid_t, size_t, hbool_t);
+herr_t H5Pget_fapl_core(hid_t, size_t *, hbool_t *);
 typedef enum H5FD_mpio_xfer_t H5FD_mpio_xfer_t;
 enum H5FD_mpio_xfer_t {
   H5FD_MPIO_INDEPENDENT = 0,
@@ -1434,8 +1439,6 @@ herr_t H5Pset_dxpl_mpio_collective_opt(hid_t, H5FD_mpio_collective_opt_t);
 herr_t H5Pset_dxpl_mpio_chunk_opt(hid_t, H5FD_mpio_chunk_opt_t);
 herr_t H5Pset_dxpl_mpio_chunk_opt_num(hid_t, unsigned int);
 herr_t H5Pset_dxpl_mpio_chunk_opt_ratio(hid_t, unsigned int);
-herr_t H5Pset_fapl_mpiposix(hid_t, struct ompi_communicator_t *, hbool_t);
-herr_t H5Pget_fapl_mpiposix(hid_t, struct ompi_communicator_t **, hbool_t *);
 ]]
 
 -- If the HDF5 library has been linked to the application, use HDF5

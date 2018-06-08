@@ -76,6 +76,9 @@
 <dt><code>file:get_intent()</code></dt>
 <dd><p>Returns the mode in which the file was opened.</p>
 </dd>
+<dt><code>file:get_vfd_handle([fapl])</code></dt>
+<dd><p>Returns a pointer to the file handle from the low-level virtual file driver. A second, optional argument <code>fapl</code> specifies the <a href="#file-access-properties">file access properties</a> with which the file was created or opened.</p>
+</dd>
 <dt><code>file:flush()</code></dt>
 <dd><p>Flushes file contents to disk.</p>
 </dd>
@@ -86,13 +89,35 @@
 <h2 id="groups">Groups</h2>
 <dl>
 <dt><code>group:create_group(name[, lcpl[, gcpl[, gapl]]])</code></dt>
-<dd><p>Creates and returns a group that is linked into the file at the given location with the given name. <code>group</code> may be a group or file. A second, optional argument <code>lcpl</code> specifies the <a href="#link-creation-properties">link creation properties</a>. A third, optional argument <code>gcpl</code> specifies the group creation properties. A fourth, optional argument <code>gapl</code> specifies the group access properties.</p>
+<dd><p>Creates and returns a group that is linked into the file at the given location with the given name. <code>group</code> may be a group or file. A second, optional argument <code>lcpl</code> specifies the <a href="#link-creation-properties">link creation properties</a>. A third, optional argument <code>gcpl</code> specifies the <a href="#group-creation-properties">group creation properties</a>. A fourth, optional argument <code>gapl</code> specifies the group access properties.</p>
 </dd>
 <dt><code>group:create_anon_group([gcpl[, gapl]])</code></dt>
-<dd><p>Creates and returns a group in the file that contains the given location. The group must be <a href="#objects">linked</a> into the file separately, otherwise it is deleted when the file is closed. <code>group</code> may be a group or file. A first, optional argument <code>gcpl</code> specifies the group creation properties. A second, optional argument <code>gapl</code> specifies the group specifies the group access properties.</p>
+<dd><p>Creates and returns a group in the file that contains the given location. The group must be <a href="#objects">linked</a> into the file separately, otherwise it is deleted when the file is closed. <code>group</code> may be a group or file. A first, optional argument <code>gcpl</code> specifies the <a href="#group-creation-properties">group creation properties</a>. A second, optional argument <code>gapl</code> specifies the group specifies the group access properties.</p>
 </dd>
 <dt><code>group:open_group(name[, gapl])</code></dt>
 <dd><p>Opens and returns the group at the given location with the given name. <code>group</code> may be a group or file. A second, optional argument <code>gapl</code> specifies the group access properties.</p>
+</dd>
+<dt><code>group:get_group_info()</code></dt>
+<dd><p>Returns a value with the following methods:</p>
+<dl>
+<dt><code>info:get_num_links()</code></dt>
+<dd>Returns the number of links in the group.
+</dd>
+<dt><code>info:get_max_corder()</code></dt>
+<dd>Returns the current maximum creation order value.
+</dd>
+<dt><code>info:get_mounted()</code></dt>
+<dd>Returns <strong>true</strong> if a file is mounted onto the group; otherwise returns <strong>false</strong>.
+</dd>
+<dt><code>info:get_storage_type()</code></dt>
+<dd><p>Returns the storage type for links in the group:</p>
+<ul>
+<li><strong>&quot;compact&quot;</strong>: compact storage;</li>
+<li><strong>&quot;dense&quot;</strong>: indexed storage;</li>
+<li><strong>&quot;symbol_table&quot;</strong>: symbol tables.</li>
+</ul>
+</dd>
+</dl>
 </dd>
 </dl>
 <h2 id="datasets">Datasets</h2>
@@ -214,6 +239,16 @@
 </dl>
 <h2 id="datatypes">Datatypes</h2>
 <dl>
+<dt><code>hdf5.create_type(class, size)</code></dt>
+<dd><p>Creates and returns a datatype of the given size in bytes.</p>
+<p><code>class</code> can be any of the following, which creates a</p>
+<ul>
+<li><strong>&quot;compound&quot;</strong>: compound datatype;</li>
+<li><strong>&quot;opaque&quot;</strong>: opaque datatype;</li>
+<li><strong>&quot;enum&quot;</strong>: enumeration datatype;</li>
+<li><strong>&quot;string&quot;</strong>: fixed-length or variable-length string datatype.</li>
+</ul>
+</dd>
 <dt><code>dtype:commit(group, name[, lcpl[, tcpl[, tapl]]])</code></dt>
 <dd><p>Commit a transient datatype, and link the datatype into into the given group with the given name. A transient datatype is a datatype that is not locked and not committed. A third, optional argument <code>lcpl</code> specifies the <a href="#link-creation-properties">link creation properties</a>. A fourth, optional argument <code>tcpl</code> specifies the datatype creation properties. A fourth, optional argument <code>tapl</code> specifies the datatype access properties.</p>
 </dd>
@@ -268,6 +303,22 @@
 <dl>
 <dt><code>dtype:is_variable_str()</code></dt>
 <dd>Returns <strong>true</strong> if the datatype is a variable-length string datatype, otherwise returns <strong>false</strong>.
+</dd>
+</dl>
+<h3 id="array-datatypes">Array datatypes</h3>
+<dl>
+<dt><code>dtype:array_create(dims)</code></dt>
+<dd>Creates and returns an array datatype of the given element datatype. <code>dims</code> is a sequence with the array dimensions.
+</dd>
+</dl>
+<h3 id="compound-datatypes">Compound datatypes</h3>
+<dl>
+<dt><code>dtype:insert(name, offset, field)</code></dt>
+<dd><p>Adds a member of datatype <code>field</code> with the given name at the given offset in bytes in the compound datatype.</p>
+<p><a href="http://luajit.org/ext_ffi_api.html#ffi_offsetof">ffi.offsetof</a> may be used to determine the offset of a C <code>struct</code> member.</p>
+</dd>
+<dt><code>dtype:pack()</code></dt>
+<dd><p>Recursively removes padding from the compound datatype.</p>
 </dd>
 </dl>
 <h3 id="enumeration-datatypes">Enumeration datatypes</h3>
@@ -588,6 +639,20 @@
 <dt><code>group:delete_link(name[, lapl])</code></dt>
 <dd><p>Deletes the link with the given name. A second, optional argument <code>lapl</code> specifies the link access properties.</p>
 </dd>
+<dt><code>group:get_link_name_by_idx(group_name, n[, index_type[, order[, lapl]]])</code></dt>
+<dd><p>Returns the name of the <code>n</code>-th link in the group with the given name, where the links are ordered according to the given index type and order. A fifth, optional argument <code>lapl</code> specifies the link access properties.</p>
+<p><code>index_type</code> may be one of the following values, to order links by</p>
+<ul>
+<li><strong>&quot;name&quot;</strong>: link name (the default);</li>
+<li><strong>&quot;crt_order&quot;</strong>: creation order.</li>
+</ul>
+<p><code>order</code> may be one of the following values, to order links in</p>
+<ul>
+<li><strong>&quot;inc&quot;</strong>: increasing order;</li>
+<li><strong>&quot;dec&quot;</strong>: decreasing order;</li>
+<li><strong>&quot;native&quot;</strong>: fastest available order (the default).</li>
+</ul>
+</dd>
 </dl>
 <h2 id="objects">Objects</h2>
 <dl>
@@ -597,6 +662,9 @@
 <dt><code>group:exists_object(name[, lapl])</code></dt>
 <dd><p>Returns <strong>true</strong> if an object with the given name exists, otherwise returns <strong>false</strong>. <code>group</code> may be a group or file. A second, optional argument <code>lapl</code> specifies the link access properties.</p>
 <p><em>This function is available with HDF5 1.8.5 or later.</em></p>
+</dd>
+<dt><code>group:copy_object(src_name, dst_group, dst_name[, ocpypl[, lcpl]])</code></dt>
+<dd><p>Copies the object with the given source name to the given destination group or file using the given destination name. <code>group</code> may be a group or file. A fourth, optional argument <code>ocpypl</code> specifies the <a href="#object-copy-properties">object copy properties</a>. A fifth, optional argument <code>lcpl</code> specifies the <a href="#link-creation-properties">link creation properties</a>.</p>
 </dd>
 <dt><code>group:link_object(obj, link_name[, lcpl[, lapl]])</code></dt>
 <dd><p>Links the given object into the file at the given location with the given name. <code>group</code> may be a group or file. A third, optional argument <code>lcpl</code> specifies the <a href="#link-creation-properties">link creation properties</a>. A fourth, optional argument <code>lapl</code> specifies the link access properties.</p>
@@ -683,7 +751,7 @@
 <ul>
 <li><strong>&quot;file_create&quot;</strong>: <a href="#file-creation-properties">file creation properties</a>;</li>
 <li><strong>&quot;file_access&quot;</strong>: <a href="#file-access-properties">file access properties</a>;</li>
-<li><strong>&quot;group_create&quot;</strong>: group creation properties;</li>
+<li><strong>&quot;group_create&quot;</strong>: <a href="#group-creation-properties">group creation properties</a>;</li>
 <li><strong>&quot;group_access&quot;</strong>: group access properties;</li>
 <li><strong>&quot;dataset_create&quot;</strong>: <a href="#dataset-creation-properties">dataset creation properties</a>;</li>
 <li><strong>&quot;dataset_access&quot;</strong>: dataset access properties;</li>
@@ -729,6 +797,12 @@
 <dt><code>fapl:get_libver_bounds()</code></dt>
 <dd><p>Returns the lower and the upper bound on the file format version.</p>
 </dd>
+<dt><code>fapl:set_fapl_core(increment, backing_store)</code></dt>
+<dd><p>Sets the core file driver for read and write access to a file. The contents of the file are stored in a buffer for which memory is allocated as needed in multiples of the given increment size in bytes. If <code>backing_store</code> is <strong>true</strong>, an empty file is created on disk, and the contents of the file are written to disk when the file is flushed or closed; otherwise, if <strong>false</strong>, the file is not created on disk, and the contents of the file are discarded when the file is closed.</p>
+</dd>
+<dt><code>fapl:get_fapl_core()</code></dt>
+<dd><p>Returns the memory increment size in bytes; and <strong>true</strong> if the file is stored on disk, or <strong>false</strong> otherwise.</p>
+</dd>
 </dl>
 <p><em>The following methods are available if HDF5 is compiled with MPI-IO support.</em></p>
 <dl>
@@ -757,6 +831,9 @@
 </dd>
 <dt><code>dcpl:set_deflate(level)</code></dt>
 <dd><p>Enables compression of the raw data using the <a href="http://www.zlib.net/feldspar.html">deflate algorithm</a> of zlib. The compression level is a number in the range <strong>0</strong> to <strong>9</strong>, where a higher level corresponds to a better compression ratio.</p>
+</dd>
+<dt><code>dcpl:set_shuffle()</code></dt>
+<dd><p>Sets the <a href="http://www.hdfgroup.org/HDF5/doc_resource/H5Shuffle_Perf.pdf">shuffle filter</a>, which reorders bytes for better compressibility.</p>
 </dd>
 <dt><code>dcpl:set_fill_value(buf, buf_type)</code></dt>
 <dd><p>Sets the fill value for a dataset. The fill value is read from the array <code>buf</code>, whose element type corresponds to the datatype <code>buf_type</code>. The datatype of the buffer must be <a href="http://www.hdfgroup.org/HDF5/doc/UG/11_Datatypes.html#Dtransfer">convertible</a> to the datatype of the dataset.</p>
@@ -789,6 +866,21 @@
 <dd><p>Returns MPI-IO data transfer mode.</p>
 </dd>
 </dl>
+<h3 id="group-creation-properties">Group creation properties</h3>
+<dl>
+<dt><code>gcpl:set_link_creation_order(flags)</code></dt>
+<dd><p>Sets creation order tracking and indexing of links in a group.</p>
+<p><code>flags</code> can be one or a sequence of the following:</p>
+<ul>
+<li><strong>&quot;tracked&quot;</strong>: link creation order is tracked;</li>
+<li><strong>&quot;indexed&quot;</strong>: link creation order is indexed (requires <strong>&quot;tracked&quot;</strong>).</li>
+</ul>
+<p>By default link creation order is neither tracked nor indexed.</p>
+</dd>
+<dt><code>gcpl:get_link_creation_order()</code></dt>
+<dd><p>Returns a table with the link creation order flags (<strong>true</strong> or <strong>nil</strong>).</p>
+</dd>
+</dl>
 <h3 id="link-creation-properties">Link creation properties</h3>
 <dl>
 <dt><code>lcpl:set_create_intermediate_group(flag)</code></dt>
@@ -796,6 +888,24 @@
 </dd>
 <dt><code>lcpl:get_create_intermediate_group()</code></dt>
 <dd><p>Returns <strong>true</strong> if missing intermediate groups are to be created, otherwise returns <strong>false</strong>.</p>
+</dd>
+</dl>
+<h3 id="object-copy-properties">Object copy properties</h3>
+<dl>
+<dt><code>ocpypl:set_copy_object(flags)</code></dt>
+<dd><p>Sets the object copy properties.</p>
+<p><code>flags</code> can be one or a sequence of the following, in which case the object is copied</p>
+<ul>
+<li><strong>&quot;shallow_hierarchy&quot;</strong>: including only the intermediate members of a group;</li>
+<li><strong>&quot;expand_soft_link&quot;</strong>: expanding soft links into objects;</li>
+<li><strong>&quot;expand_ext_link&quot;</strong>: expanding external links into objects;</li>
+<li><strong>&quot;expand_reference&quot;</strong>: including objects pointed to by references;</li>
+<li><strong>&quot;without_attr&quot;</strong>: excluding attributes;</li>
+<li><strong>&quot;merge_committed_dtype&quot;</strong>: using matching committed datatypes from the destination file.</li>
+</ul>
+</dd>
+<dt><code>ocpypl:get_copy_object()</code></dt>
+<dd><p>Returns a table with the object copy properties (<strong>true</strong> or <strong>nil</strong>).</p>
 </dd>
 </dl>
 </div>

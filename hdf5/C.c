@@ -1,7 +1,7 @@
 /*
  * HDF5 for Lua.
- * Copyright © 2013 Peter Colberg.
- * For conditions of distribution and use, see copyright notice in LICENSE.
+ * Copyright © 2013–2014 Peter Colberg.
+ * Distributed under the MIT license. (See accompanying file LICENSE.)
  */
 
 /* LuaJIT allows passing Lua file object as `void *` argument. */
@@ -55,6 +55,9 @@ cdecl_func(H5garbage_collect)
 cdecl_func(H5set_free_list_limits)
 cdecl_func(H5get_libversion)
 cdecl_func(H5check_version)
+#if H5_VERSION_GE(1, 8, 13)
+cdecl_func(H5free_memory)
+#endif
 
 /* Identifier Interface */
 cdecl_type(hid_t)
@@ -1181,6 +1184,10 @@ cdecl_type(H5FD_file_image_callbacks_t)
 cdecl_func(H5Pset_file_image_callbacks)
 cdecl_func(H5Pget_file_image_callbacks)
 #endif
+#if H5_VERSION_GE(1, 8, 13)
+cdecl_func(H5Pset_core_write_tracking)
+cdecl_func(H5Pget_core_write_tracking)
+#endif
 
 cdecl_func(H5Pset_layout)
 cdecl_func(H5Pget_layout)
@@ -1270,6 +1277,9 @@ cdecl_func(H5Pset_mcdt_search_cb)
 cdecl_func(H5Pget_mcdt_search_cb)
 #endif
 
+cdecl_func(H5Pset_fapl_core)
+cdecl_func(H5Pget_fapl_core)
+
 #ifdef H5_HAVE_PARALLEL
 /* MPI-IO driver */
 cdecl_type(H5FD_mpio_xfer_t)
@@ -1286,8 +1296,4 @@ cdecl_func(H5Pset_dxpl_mpio_collective_opt)
 cdecl_func(H5Pset_dxpl_mpio_chunk_opt)
 cdecl_func(H5Pset_dxpl_mpio_chunk_opt_num)
 cdecl_func(H5Pset_dxpl_mpio_chunk_opt_ratio)
-
-/* MPI POSIX driver */
-cdecl_func(H5Pset_fapl_mpiposix)
-cdecl_func(H5Pget_fapl_mpiposix)
 #endif

@@ -58,6 +58,12 @@ Files
 
   : Returns the mode in which the file was opened.
 
+`file:get_vfd_handle([fapl])`
+
+  : Returns a pointer to the file handle from the low-level virtual file driver.
+    A second, optional argument `fapl` specifies the [file access properties]
+    with which the file was created or opened.
+
 `file:flush()`
 
   : Flushes file contents to disk.
@@ -78,7 +84,7 @@ Groups
   : Creates and returns a group that is linked into the file at the given
     location with the given name. `group` may be a group or file. A second,
     optional argument `lcpl` specifies the [link creation properties]. A
-    third, optional argument `gcpl` specifies the group creation properties.
+    third, optional argument `gcpl` specifies the [group creation properties].
     A fourth, optional argument `gapl` specifies the group access properties.
 
 `group:create_anon_group([gcpl[, gapl]])`
@@ -86,7 +92,7 @@ Groups
   : Creates and returns a group in the file that contains the given location.
     The group must be [linked](#objects) into the file separately, otherwise it
     is deleted when the file is closed. `group` may be a group or file. A first,
-    optional argument `gcpl` specifies the group creation properties. A second,
+    optional argument `gcpl` specifies the [group creation properties]. A second,
     optional argument `gapl` specifies the group specifies the group access
     properties.
 
@@ -95,6 +101,23 @@ Groups
   : Opens and returns the group at the given location with the given name.
     `group` may be a group or file. A second, optional argument `gapl` specifies
     the group access properties.
+
+`group:get_group_info()`
+
+  : Returns a value with the following methods:
+
+    `info:get_num_links()`
+      : Returns the number of links in the group.
+    `info:get_max_corder()`
+      : Returns the current maximum creation order value.
+    `info:get_mounted()`
+      : Returns **true** if a file is mounted onto the group; otherwise returns **false**.
+    `info:get_storage_type()`
+      : Returns the storage type for links in the group:
+
+          - **"compact"**: compact storage;
+          - **"dense"**: indexed storage;
+          - **"symbol_table"**: symbol tables.
 
 
 Datasets
@@ -334,6 +357,17 @@ Dataspaces
 Datatypes
 ---------
 
+`hdf5.create_type(class, size)`
+
+  : Creates and returns a datatype of the given size in bytes.
+
+    `class` can be any of the following, which creates a
+
+      - **"compound"**: compound datatype;
+      - **"opaque"**: opaque datatype;
+      - **"enum"**: enumeration datatype;
+      - **"string"**: fixed-length or variable-length string datatype.
+
 `dtype:commit(group, name[, lcpl[, tcpl[, tapl]]])`
 
   : Commit a transient datatype, and link the datatype into into the given
@@ -413,6 +447,30 @@ Datatypes
 
   : Returns **true** if the datatype is a variable-length string datatype,
     otherwise returns **false**.
+
+
+### Array datatypes
+
+`dtype:array_create(dims)`
+
+  : Creates and returns an array datatype of the given element datatype.
+    `dims` is a sequence with the array dimensions.
+
+
+### Compound datatypes
+
+`dtype:insert(name, offset, field)`
+
+  : Adds a member of datatype `field` with the given name at the given offset
+    in bytes in the compound datatype.
+
+    [ffi.offsetof] may be used to determine the offset of a C `struct` member.
+
+    [ffi.offsetof]: http://luajit.org/ext_ffi_api.html#ffi_offsetof
+
+`dtype:pack()`
+
+  : Recursively removes padding from the compound datatype.
 
 
 ### Enumeration datatypes
@@ -570,6 +628,23 @@ Links
   : Deletes the link with the given name. A second, optional argument `lapl`
     specifies the link access properties.
 
+`group:get_link_name_by_idx(group_name, n[, index_type[, order[, lapl]]])`
+
+  : Returns the name of the `n`-th link in the group with the given name,
+    where the links are ordered according to the given index type and order.
+    A fifth, optional argument `lapl` specifies the link access properties.
+
+    `index_type` may be one of the following values, to order links by
+
+      - **"name"**: link name (the default);
+      - **"crt_order"**: creation order.
+
+    `order` may be one of the following values, to order links in
+
+      - **"inc"**: increasing order;
+      - **"dec"**: decreasing order;
+      - **"native"**: fastest available order (the default).
+
 
 Objects
 -------
@@ -587,6 +662,13 @@ Objects
     specifies the link access properties.
 
     *This function is available with HDF5 1.8.5 or later.*
+
+`group:copy_object(src_name, dst_group, dst_name[, ocpypl[, lcpl]])`
+
+  : Copies the object with the given source name to the given destination group
+    or file using the given destination name. `group` may be a group or file.
+    A fourth, optional argument `ocpypl` specifies the [object copy properties].
+    A fifth, optional argument `lcpl` specifies the [link creation properties].
 
 `group:link_object(obj, link_name[, lcpl[, lapl]])`
 
@@ -693,7 +775,7 @@ Property lists
 
       - **"file_create"**: [file creation properties];
       - **"file_access"**: [file access properties];
-      - **"group_create"**: group creation properties;
+      - **"group_create"**: [group creation properties];
       - **"group_access"**: group access properties;
       - **"dataset_create"**: [dataset creation properties];
       - **"dataset_access"**: dataset access properties;
@@ -748,6 +830,21 @@ Property lists
 
   : Returns the lower and the upper bound on the file format version.
 
+`fapl:set_fapl_core(increment, backing_store)`
+
+  : Sets the core file driver for read and write access to a file. The contents
+    of the file are stored in a buffer for which memory is allocated as needed
+    in multiples of the given increment size in bytes. If `backing_store` is
+    **true**, an empty file is created on disk, and the contents of the file are
+    written to disk when the file is flushed or closed; otherwise, if **false**,
+    the file is not created on disk, and the contents of the file are discarded
+    when the file is closed.
+
+`fapl:get_fapl_core()`
+
+  : Returns the memory increment size in bytes; and **true** if the file is
+    stored on disk, or **false** otherwise.
+
 *The following methods are available if HDF5 is compiled with MPI-IO support.*
 
 `fapl:set_fapl_mpio(comm[, info])`
@@ -793,6 +890,12 @@ Property lists
     higher level corresponds to a better compression ratio.
 
     [deflate algorithm]: http://www.zlib.net/feldspar.html
+
+`dcpl:set_shuffle()`
+
+  : Sets the [shuffle filter], which reorders bytes for better compressibility.
+
+    [shuffle filter]: http://www.hdfgroup.org/HDF5/doc_resource/H5Shuffle_Perf.pdf
 
 `dcpl:set_fill_value(buf, buf_type)`
 
@@ -844,6 +947,26 @@ Property lists
 [dataset transfer properties]: #dataset-transfer-properties
 
 
+### Group creation properties
+
+`gcpl:set_link_creation_order(flags)`
+
+  : Sets creation order tracking and indexing of links in a group.
+
+    `flags` can be one or a sequence of the following:
+
+      - **"tracked"**: link creation order is tracked;
+      - **"indexed"**: link creation order is indexed (requires **"tracked"**).
+
+    By default link creation order is neither tracked nor indexed.
+
+`gcpl:get_link_creation_order()`
+
+  : Returns a table with the link creation order flags (**true** or **nil**).
+
+[group creation properties]: #group-creation-properties
+
+
 ### Link creation properties
 
 `lcpl:set_create_intermediate_group(flag)`
@@ -861,3 +984,25 @@ Property lists
     otherwise returns **false**.
 
 [link creation properties]: #link-creation-properties
+
+
+### Object copy properties
+
+`ocpypl:set_copy_object(flags)`
+
+  : Sets the object copy properties.
+
+    `flags` can be one or a sequence of the following, in which case the object is copied
+
+      * **"shallow_hierarchy"**: including only the intermediate members of a group;
+      * **"expand_soft_link"**: expanding soft links into objects;
+      * **"expand_ext_link"**: expanding external links into objects;
+      * **"expand_reference"**: including objects pointed to by references;
+      * **"without_attr"**: excluding attributes;
+      * **"merge_committed_dtype"**: using matching committed datatypes from the destination file.
+
+`ocpypl:get_copy_object()`
+
+  : Returns a table with the object copy properties (**true** or **nil**).
+
+[object copy properties]: #object-copy-properties

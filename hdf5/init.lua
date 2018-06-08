@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- HDF5 for Lua.
--- Copyright © 2013 Peter Colberg.
--- For conditions of distribution and use, see copyright notice in LICENSE.
+-- Copyright © 2013–2014 Peter Colberg.
+-- Distributed under the MIT license. (See accompanying file LICENSE.)
 ------------------------------------------------------------------------------
 
 local C   = require("hdf5.C")
@@ -17,14 +17,19 @@ local _M = {}
 local H5D_fill_value_t_1 = ffi.typeof("H5D_fill_value_t[1]")
 local H5E_walk_t         = ffi.typeof("H5E_walk_t")
 local H5F_libver_t_1     = ffi.typeof("H5F_libver_t[1]")
+local H5G_info_t         = ffi.typeof("H5G_info_t")
+local H5G_info_t_1       = ffi.typeof("H5G_info_t[1]")
 local H5O_info_t         = ffi.typeof("H5O_info_t")
 local H5O_info_t_1       = ffi.typeof("H5O_info_t[1]")
 local H5O_type_t_1       = ffi.typeof("H5O_type_t[1]")
 local char_n             = ffi.typeof("char[?]")
+local hbool_t_1          = ffi.typeof("hbool_t[1]")
 local hid_t_n            = ffi.typeof("hid_t[?]")
 local hsize_t_n          = ffi.typeof("hsize_t[?]")
 local hssize_t_n         = ffi.typeof("hssize_t[?]")
+local size_t_1           = ffi.typeof("size_t[1]")
 local unsigned_1         = ffi.typeof("unsigned[1]")
+local void_ptr_1         = ffi.typeof("void *[1]")
 
 -- Object identifiers.
 local attribute_id = ffi.typeof("struct { hid_t id; }")
@@ -76,6 +81,25 @@ end
 
 -- Weak object identifier references.
 local objects = setmetatable({}, {__mode = "v"})
+
+-- Converts a bit-field to a table of boolean values.
+local function bittobool(b, map)
+  local t = {}
+  for k, v in pairs(map) do
+    if bit.band(b, k) ~= 0 then t[v] = true end
+  end
+  return t
+end
+
+-- Converts a sequence of strings to a bit-field.
+local function strtobit(t, map)
+  if type(t) == "string" then return map[t] end
+  local b = 0
+  for _, v in ipairs(t) do
+    b = bit.bor(b, map[v])
+  end
+  return b
+end
 
 function _M.get_libversion()
   local maj, min, rel = unsigned_1(), unsigned_1(), unsigned_1()
@@ -160,6 +184,14 @@ do
   end
 end
 
+function file.get_vfd_handle(file, fapl)
+  if fapl ~= nil then fapl = fapl.id else fapl = C.H5P_DEFAULT end
+  local handle = void_ptr_1()
+  local err = C.H5Fget_vfd_handle(file.id, fapl, handle)
+  if err < 0 then return error(get_error()) end
+  return handle[0]
+end
+
 function file.flush(file)
   local err = C.H5Fflush(file.id, C.H5F_SCOPE_LOCAL)
   if err < 0 then return error(get_error()) end
@@ -204,6 +236,30 @@ function group.open_group(group, name, gapl)
   local id = C.H5Gopen(group.id, name, gapl)
   if id < 0 then return error(get_error()) end
   return group_id(id)
+end
+
+function group.get_group_info(group)
+  local info = H5G_info_t_1()
+  local err = C.H5Gget_info(group.id, info)
+  if err < 0 then return error(get_error()) end
+  return H5G_info_t(info[0])
+end
+
+do
+  local storage_types = {
+    [C.H5G_STORAGE_TYPE_COMPACT]      = "compact",
+    [C.H5G_STORAGE_TYPE_DENSE]        = "dense",
+    [C.H5G_STORAGE_TYPE_SYMBOL_TABLE] = "symbol_table",
+  }
+
+  ffi.metatype(H5G_info_t, {
+    __index = {
+      get_num_links    = function(info) return tonumber(info.nlinks) end,
+      get_max_corder   = function(info) return tonumber(info.max_corder) end,
+      get_mounted      = function(info) return info.mounted ~= 0 end,
+      get_storage_type = function(info) return storage_types[tonumber(info.storage_type)] end,
+    },
+  })
 end
 
 function group.create_dataset(group, name, dtype, space, lcpl, dcpl, dapl)
@@ -486,6 +542,22 @@ do
   end
 end
 
+do
+  local classes = {
+    compound = C.H5T_COMPOUND,
+    opaque   = C.H5T_OPAQUE,
+    enum     = C.H5T_ENUM,
+    string   = C.H5T_STRING,
+  }
+
+  function _M.create_type(class, size)
+    class = classes[class]
+    local id = C.H5Tcreate(class, size)
+    if id < 0 then return error(get_error()) end
+    return datatype_id(id)
+  end
+end
+
 function datatype.commit(dtype, group, name, lcpl, tcpl, tapl)
   if lcpl ~= nil then lcpl = lcpl.id else lcpl = C.H5P_DEFAULT end
   if tcpl ~= nil then tcpl = tcpl.id else tcpl = C.H5P_DEFAULT end
@@ -582,6 +654,24 @@ function datatype.is_variable_str(dtype)
   local flag = C.H5Tis_variable_str(dtype.id)
   if flag < 0 then return error(get_error()) end
   return flag ~= 0
+end
+
+function datatype.array_create(dtype, dims)
+  local rank = #dims
+  dims = hsize_t_n(rank, dims)
+  local id = C.H5Tarray_create(dtype.id, rank, dims)
+  if id < 0 then return error(get_error()) end
+  return datatype_id(id)
+end
+
+function datatype.insert(dtype, name, offset, field)
+  local err = C.H5Tinsert(dtype.id, name, offset, field.id)
+  if err < 0 then return error(get_error()) end
+end
+
+function datatype.pack(dtype)
+  local err = C.H5Tpack(dtype.id)
+  if err < 0 then return error(get_error()) end
 end
 
 function datatype.enum_create(dtype)
@@ -695,6 +785,33 @@ function group.delete_link(group, name, lapl)
 end
 
 do
+  local index_types = {
+    name      = C.H5_INDEX_NAME,
+    crt_order = C.H5_INDEX_CRT_ORDER,
+  }
+
+  local iter_orders = {
+    inc    = C.H5_ITER_INC,
+    dec    = C.H5_ITER_DEC,
+    native = C.H5_ITER_NATIVE,
+  }
+
+  function group.get_link_name_by_idx(group, group_name, n, index_type, order, lapl)
+    if index_type ~= nil then index_type = index_types[index_type] else index_type = C.H5_INDEX_NAME end
+    if order ~= nil then order = iter_orders[order] else order = C.H5_ITER_NATIVE end
+    if lapl ~= nil then lapl = lapl.id else lapl = C.H5P_DEFAULT end
+    local ret = C.H5Lget_name_by_idx(group.id, group_name, index_type, order, n, nil, 0, lapl)
+    if ret < 0 then return error(get_error()) end
+    if ret == 0 then return end
+    local size = tonumber(ret)
+    local name = char_n(size + 1)
+    local ret = C.H5Lget_name_by_idx(group.id, group_name, index_type, order, n, name, size + 1, lapl)
+    if ret < 0 then return error(get_error()) end
+    return ffi.string(name, size)
+  end
+end
+
+do
   local types = {
     [C.H5I_DATASET]  = dataset_id,
     [C.H5I_DATATYPE] = datatype_id,
@@ -724,6 +841,13 @@ function group.link_object(group, object, link_name, lcpl, lapl)
   if lcpl ~= nil then lcpl = lcpl.id else lcpl = C.H5P_DEFAULT end
   if lapl ~= nil then lapl = lapl.id else lapl = C.H5P_DEFAULT end
   local err = C.H5Olink(object.id, group.id, link_name, lcpl, lapl)
+  if err < 0 then return error(get_error()) end
+end
+
+function group.copy_object(src_group, src_name, dst_group, dst_name, ocpypl, lcpl)
+  if ocpypl ~= nil then ocpypl = ocpypl.id else ocpypl = C.H5P_DEFAULT end
+  if lcpl ~= nil then lcpl = lcpl.id else lcpl = C.H5P_DEFAULT end
+  local err = C.H5Ocopy(src_group.id, src_name, dst_group.id, dst_name, ocpypl, lcpl)
   if err < 0 then return error(get_error()) end
 end
 
@@ -908,6 +1032,19 @@ do
   end
 end
 
+function plist.set_fapl_core(fapl, increment, backing_store)
+  local err = C.H5Pset_fapl_core(fapl.id, increment, backing_store)
+  if err < 0 then return error(get_error()) end
+end
+
+function plist.get_fapl_core(fapl)
+  local increment = size_t_1()
+  local backing_store = hbool_t_1()
+  local err = C.H5Pget_fapl_core(fapl.id, increment, backing_store)
+  if err < 0 then return error(get_error()) end
+  return tonumber(increment[0]), backing_store[0] ~= 0
+end
+
 if pcall(function() return C.H5Pset_fapl_mpio end) then
   function plist.set_fapl_mpio(fapl, comm, info)
     if info ~= nil then info = info.id else info = ffi.cast("MPI_Info", C.MPI_INFO_NULL) end
@@ -970,6 +1107,11 @@ function plist.set_deflate(plist, level)
   if err < 0 then return error(get_error()) end
 end
 
+function plist.set_shuffle(plist)
+  local err = C.H5Pset_shuffle(plist.id)
+  if err < 0 then return error(get_error()) end
+end
+
 function plist.set_fill_value(plist, buf, buf_type)
   if buf_type ~= nil then buf_type = buf_type.id else buf_type = C.H5I_INVALID_HID end
   local err = C.H5Pset_fill_value(plist.id, buf_type, buf)
@@ -1025,6 +1167,33 @@ if pcall(function() return C.H5Pset_dxpl_mpio end) then
   end
 end
 
+do
+  local creation_order_flags = {
+    tracked = C.H5P_CRT_ORDER_TRACKED,
+    indexed = C.H5P_CRT_ORDER_INDEXED,
+  }
+
+  function plist.set_link_creation_order(gcpl, flags)
+    flags = strtobit(flags, creation_order_flags)
+    local err = C.H5Pset_link_creation_order(gcpl.id, flags)
+    if err < 0 then return error(get_error()) end
+  end
+end
+
+do
+  local creation_order_flags = {
+    [C.H5P_CRT_ORDER_TRACKED] = "tracked",
+    [C.H5P_CRT_ORDER_INDEXED] = "indexed",
+  }
+
+  function plist.get_link_creation_order(gcpl)
+    local flags = unsigned_1()
+    local err = C.H5Pget_link_creation_order(gcpl.id, flags)
+    if err < 0 then return error(get_error()) end
+    return bittobool(flags[0], creation_order_flags)
+  end
+end
+
 function plist.set_create_intermediate_group(lcpl, flag)
   local err = C.H5Pset_create_intermediate_group(lcpl.id, flag)
   if err < 0 then return error(get_error()) end
@@ -1035,6 +1204,41 @@ function plist.get_create_intermediate_group(lcpl)
   local err = C.H5Pget_create_intermediate_group(lcpl.id, flag)
   if err < 0 then return error(get_error()) end
   return flag[0] ~= 0
+end
+
+do
+  local copy_flags = {
+    shallow_hierarchy     = C.H5O_COPY_SHALLOW_HIERARCHY_FLAG,
+    expand_soft_link      = C.H5O_COPY_EXPAND_SOFT_LINK_FLAG,
+    expand_ext_link       = C.H5O_COPY_EXPAND_EXT_LINK_FLAG,
+    expand_reference      = C.H5O_COPY_EXPAND_REFERENCE_FLAG,
+    without_attr          = C.H5O_COPY_WITHOUT_ATTR_FLAG,
+    merge_committed_dtype = C.H5O_COPY_MERGE_COMMITTED_DTYPE_FLAG,
+  }
+
+  function plist.set_copy_object(ocpypl, flags)
+    flags = strtobit(flags, copy_flags)
+    local err = C.H5Pset_copy_object(ocpypl.id, flags)
+    if err < 0 then return error(get_error()) end
+  end
+end
+
+do
+  local copy_flags = {
+    [C.H5O_COPY_SHALLOW_HIERARCHY_FLAG]     = "shallow_hierarchy",
+    [C.H5O_COPY_EXPAND_SOFT_LINK_FLAG]      = "expand_soft_link",
+    [C.H5O_COPY_EXPAND_EXT_LINK_FLAG]       = "expand_ext_link",
+    [C.H5O_COPY_EXPAND_REFERENCE_FLAG]      = "expand_reference",
+    [C.H5O_COPY_WITHOUT_ATTR_FLAG]          = "without_attr",
+    [C.H5O_COPY_MERGE_COMMITTED_DTYPE_FLAG] = "merge_committed_dtype",
+  }
+
+  function plist.get_copy_object(ocpypl)
+    local flags = unsigned_1()
+    local err = C.H5Pget_copy_object(ocpypl.id, flags)
+    if err < 0 then return error(get_error()) end
+    return bittobool(flags[0], copy_flags)
+  end
 end
 
 -- Inherit object methods.

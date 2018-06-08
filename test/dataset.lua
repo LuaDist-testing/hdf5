@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- Test datasets.
--- Copyright © 2013 Peter Colberg.
--- For conditions of distribution and use, see copyright notice in LICENSE.
+-- Copyright © 2013–2014 Peter Colberg.
+-- Distributed under the MIT license. (See accompanying file LICENSE.)
 ------------------------------------------------------------------------------
 
 require("strict")
@@ -10,11 +10,7 @@ pcall(require, "luacov")
 
 local hdf5 = require("hdf5")
 local ffi  = require("ffi")
-
-local function require_version(maj, min, rel)
-  local maj_ver, min_ver, rel_ver = hdf5.get_libversion()
-  return maj_ver > maj or maj_ver == maj and (min_ver > min or min_ver == min and rel_ver >= rel)
-end
+local test = require("test")
 
 local path = "test_dataset.h5"
 
@@ -27,7 +23,7 @@ do
   assert(dset:get_space():extent_equal(file_space))
   local dcpl = dset:get_dataset_create_plist()
   assert(dcpl:get_layout() == "contiguous")
-  if require_version(1, 8, 3) then assert(dset:get_dataset_access_plist()) end
+  if test.require_version(1, 8, 3) then assert(dset:get_dataset_access_plist()) end
 end
 collectgarbage()
 
@@ -80,6 +76,7 @@ do
   local file_space = hdf5.create_simple_space({5, 0}, {5, nil})
   local dcpl = hdf5.create_plist("dataset_create")
   dcpl:set_chunk({5, 10})
+  dcpl:set_shuffle()
   dcpl:set_deflate(6)
   local dset = file:create_dataset("position", file_type, file_space, nil, dcpl)
   dset:set_extent({5, 123})

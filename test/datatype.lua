@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- Test datatypes.
--- Copyright © 2013 Peter Colberg.
--- For conditions of distribution and use, see copyright notice in LICENSE.
+-- Copyright © 2013–2014 Peter Colberg.
+-- Distributed under the MIT license. (See accompanying file LICENSE.)
 ------------------------------------------------------------------------------
 
 require("strict")
@@ -115,6 +115,77 @@ do
   assert(buf[1][1] == species.H)
   assert(buf[2][0] == species.K)
   assert(buf[2][1] == species.Li)
+end
+collectgarbage()
+
+do
+  local ctype = ffi.typeof[[struct {
+    int count;
+    double mean;
+  }]]
+  local memtype = hdf5.create_type("compound", ffi.sizeof(ctype))
+  assert(memtype:get_class() == "compound")
+  assert(memtype:get_size() == ffi.sizeof(ctype))
+  memtype:insert("mean", ffi.offsetof(ctype, "mean"), hdf5.double)
+  memtype:insert("count", ffi.offsetof(ctype, "count"), hdf5.int)
+  assert(memtype:get_size() == ffi.sizeof(ctype))
+  local filetype = memtype:copy()
+  filetype:pack()
+  assert(filetype:get_size() == ffi.sizeof[[struct {
+    int count;
+    double mean;
+  } __attribute__((packed))]])
+  local dspace = hdf5.create_space("scalar")
+  do
+    local file = hdf5.create_file(path)
+    local dset = file:create_dataset("accum", filetype, dspace)
+    local buf = ctype(123456789, math.pi)
+    dset:write(buf, memtype, dspace)
+    file:close()
+  end
+  do
+    local file = hdf5.open_file(path)
+    local dset = file:open_dataset("accum")
+    local buf = ctype()
+    dset:read(buf, memtype)
+    file:close()
+    assert(buf.count == 123456789)
+    assert(buf.mean == math.pi)
+  end
+end
+collectgarbage()
+
+do
+  local N = 100
+  local dtype = hdf5.double:array_create({N, 3})
+  assert(dtype:get_size() == N * 3 * ffi.sizeof("double"))
+  local dspace = hdf5.create_space("scalar")
+  do
+    local points = ffi.new("struct { double x, y, z; }[?]", N)
+    math.randomseed(42)
+    for i = 0, N - 1 do
+      points[i].x = math.random()
+      points[i].y = math.random()
+      points[i].z = math.random()
+    end
+    local file = hdf5.create_file(path)
+    local dset = file:create_dataset("points", dtype, dspace)
+    dset:write(points, dtype, dspace)
+    file:close()
+  end
+  do
+    local file = hdf5.open_file(path)
+    local dset = file:open_dataset("points")
+    local points = ffi.new("struct { double x, y, z; }[?]", N)
+    dset:read(points, dtype, dspace)
+    file:close()
+    math.randomseed(42)
+    for i = 0, N - 1 do
+      assert(points[i].x == math.random())
+      assert(points[i].y == math.random())
+      assert(points[i].z == math.random())
+    end
+  end
 end
 collectgarbage()
 

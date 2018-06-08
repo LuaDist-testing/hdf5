@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- Test files.
--- Copyright © 2013 Peter Colberg.
--- For conditions of distribution and use, see copyright notice in LICENSE.
+-- Copyright © 2013–2014 Peter Colberg.
+-- Distributed under the MIT license. (See accompanying file LICENSE.)
 ------------------------------------------------------------------------------
 
 require("strict")
@@ -9,6 +9,7 @@ require("strict")
 pcall(require, "luacov")
 
 local hdf5 = require("hdf5")
+local ffi = require("ffi")
 
 local path = "test_file.h5"
 
@@ -19,6 +20,7 @@ for i = 1, 3 do
   assert(file:get_object_name() == "/")
   assert(file:get_name() == path)
   assert(file:get_intent() == "rdwr")
+  assert(file:get_vfd_handle() ~= nil)
   file:close()
   assert(file:get_object_type() == nil)
 end
@@ -37,6 +39,7 @@ do
   local file = hdf5.create_file(path, "excl")
   assert(file:get_name() == path)
   assert(file:get_intent() == "rdwr")
+  assert(file:get_vfd_handle() ~= nil)
 end
 collectgarbage()
 
@@ -49,6 +52,7 @@ do
   local file = hdf5.create_file(path)
   assert(file:get_name() == path)
   assert(file:get_intent() == "rdwr")
+  assert(file:get_vfd_handle() ~= nil)
 end
 collectgarbage()
 
@@ -56,6 +60,7 @@ do
   local file = hdf5.open_file(path)
   assert(file:get_name() == path)
   assert(file:get_intent() == "rdonly")
+  assert(file:get_vfd_handle() ~= nil)
 end
 collectgarbage()
 
@@ -63,6 +68,7 @@ do
   local file = hdf5.open_file(path, "rdonly")
   assert(file:get_name() == path)
   assert(file:get_intent() == "rdonly")
+  assert(file:get_vfd_handle() ~= nil)
 end
 collectgarbage()
 
@@ -70,6 +76,7 @@ do
   local file = hdf5.open_file(path, "rdwr")
   assert(file:get_name() == path)
   assert(file:get_intent() == "rdwr")
+  assert(file:get_vfd_handle() ~= nil)
   file:flush()
 end
 collectgarbage()
@@ -141,6 +148,58 @@ do
   assert(freelist == 0)
   assert(stab == 0)
   assert(shhdr == 0)
+end
+collectgarbage()
+
+do
+  local fapl = hdf5.create_plist("file_access")
+  fapl:set_fapl_core(2 ^ 20, true)
+  local file = hdf5.create_file(path, "trunc", nil, fapl)
+  do
+    local fapl = file:get_file_access_plist()
+    local increment, backing_store = fapl:get_fapl_core()
+    assert(increment == 1048576)
+    assert(backing_store == true)
+  end
+  file:flush()
+  do
+    local N = 10000
+    local dataspace = hdf5.create_simple_space({N})
+    local dataset = file:create_dataset("position", hdf5.double, dataspace)
+    local buf = ffi.new("double[?]", N)
+    for i = 0, N - 1 do buf[i] = math.random() end
+    dataset:write(buf, hdf5.double, dataspace)
+  end
+  file:close()
+end
+collectgarbage()
+
+do
+  local fapl = hdf5.create_plist("file_access")
+  fapl:set_fapl_core(2 ^ 21, true)
+  local file = hdf5.open_file(path, "rdwr", fapl)
+  do
+    local fapl = file:get_file_access_plist()
+    local increment, backing_store = fapl:get_fapl_core()
+    assert(increment == 2097152)
+    assert(backing_store == true)
+  end
+  file:copy_object("position", file, "velocity")
+  file:close()
+end
+collectgarbage()
+
+do
+  local fapl = hdf5.create_plist("file_access")
+  fapl:set_fapl_core(2 ^ 19, false)
+  local file = hdf5.create_file(path, "trunc", nil, fapl)
+  do
+    local fapl = file:get_file_access_plist()
+    local increment, backing_store = fapl:get_fapl_core()
+    assert(increment == 524288)
+    assert(backing_store == false)
+  end
+  file:close()
 end
 collectgarbage()
 
