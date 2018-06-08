@@ -1,17 +1,9 @@
--- This file was automatically generated for the LuaDist project.
-
 package = "hdf5"
-version = "1.1.0-1"
--- LuaDist source
+version = "scm-1"
 source = {
-  tag = "1.1.0-1",
-  url = "git://github.com/LuaDist-testing/hdf5.git"
+   url = "git://git.colberg.org/lua-hdf5",
+   branch = "master",
 }
--- Original source
--- source = {
---    url = "git://git.colberg.org/lua-hdf5",
---    tag = "1.1.0",
--- }
 description = {
    summary = "HDF5 for Lua",
    detailed = [[
@@ -26,7 +18,6 @@ description = {
 }
 build = {
    type = "make",
-   build_target = "test",
    build_variables = {
       LUA = "$(LUA)",
    },

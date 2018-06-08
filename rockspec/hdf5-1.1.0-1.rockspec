@@ -1,4 +1,4 @@
-package = "lua-hdf5"
+package = "hdf5"
 version = "1.1.0-1"
 source = {
    url = "git://git.colberg.org/lua-hdf5",

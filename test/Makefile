@@ -1,6 +1,6 @@
 #
 # HDF5 for Lua.
-# Copyright © 2013–2014 Peter Colberg.
+# Copyright © 2013–2015 Peter Colberg.
 # Distributed under the MIT license. (See accompanying file LICENSE.)
 #
 
@@ -11,9 +11,6 @@ ifdef LUA_PATH
   LUA_PATH := $(CURDIR)/../?.lua;$(CURDIR)/../?/init.lua;$(LUA_PATH)
 else
   LUA_PATH := $(CURDIR)/../?.lua;$(CURDIR)/../?/init.lua;;
-endif
-ifdef MPIEXEC
-  LUA_PATH := $(CURDIR)/../../lua-mpi/?.lua;$(CURDIR)/../../lua-mpi/?/init.lua;$(LUA_PATH)
 endif
 export LUA_PATH
 

@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 -- Test files.
--- Copyright © 2013–2014 Peter Colberg.
+-- Copyright © 2013–2015 Peter Colberg.
 -- Distributed under the MIT license. (See accompanying file LICENSE.)
 ------------------------------------------------------------------------------
 
@@ -169,6 +169,7 @@ do
     local buf = ffi.new("double[?]", N)
     for i = 0, N - 1 do buf[i] = math.random() end
     dataset:write(buf, hdf5.double, dataspace)
+    dataset:close()
   end
   file:close()
 end

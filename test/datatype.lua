@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 -- Test datatypes.
--- Copyright © 2013–2014 Peter Colberg.
+-- Copyright © 2013–2015 Peter Colberg.
 -- Distributed under the MIT license. (See accompanying file LICENSE.)
 ------------------------------------------------------------------------------
 
@@ -41,11 +41,29 @@ end
 collectgarbage()
 
 do
+  local dtype = hdf5.uint32:copy()
+  assert(dtype:get_precision() == 32)
+  assert(dtype:get_offset() == 0)
+  dtype:set_precision(16)
+  assert(dtype:get_precision() == 16)
+  assert(dtype:get_offset() == 0)
+  dtype:set_offset(16)
+  assert(dtype:get_precision() == 16)
+  assert(dtype:get_offset() == 16)
+  dtype:set_precision(32)
+  assert(dtype:get_precision() == 32)
+  assert(dtype:get_offset() == 0)
+end
+collectgarbage()
+
+do
   local file = hdf5.create_file(path)
   local dtype = hdf5.double:copy()
   assert(dtype:committed() == false)
   dtype:commit(file, "datatype")
   assert(dtype:committed() == true)
+  dtype:close()
+  file:close()
 end
 collectgarbage()
 
@@ -55,6 +73,8 @@ do
   assert(dtype:committed() == false)
   dtype:commit_anon(file)
   assert(dtype:committed() == true)
+  dtype:close()
+  file:close()
 end
 collectgarbage()
 
@@ -141,6 +161,7 @@ do
     local dset = file:create_dataset("accum", filetype, dspace)
     local buf = ctype(123456789, math.pi)
     dset:write(buf, memtype, dspace)
+    dset:close()
     file:close()
   end
   do
@@ -148,6 +169,7 @@ do
     local dset = file:open_dataset("accum")
     local buf = ctype()
     dset:read(buf, memtype)
+    dset:close()
     file:close()
     assert(buf.count == 123456789)
     assert(buf.mean == math.pi)
@@ -171,6 +193,7 @@ do
     local file = hdf5.create_file(path)
     local dset = file:create_dataset("points", dtype, dspace)
     dset:write(points, dtype, dspace)
+    dset:close()
     file:close()
   end
   do
@@ -178,6 +201,7 @@ do
     local dset = file:open_dataset("points")
     local points = ffi.new("struct { double x, y, z; }[?]", N)
     dset:read(points, dtype, dspace)
+    dset:close()
     file:close()
     math.randomseed(42)
     for i = 0, N - 1 do

@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 -- HDF5 for Lua.
--- Copyright © 2013–2014 Peter Colberg.
+-- Copyright © 2013–2015 Peter Colberg.
 -- Distributed under the MIT license. (See accompanying file LICENSE.)
 ------------------------------------------------------------------------------
 
@@ -41,20 +41,23 @@ local group_id     = ffi.typeof("struct { hid_t id; }")
 local plist_id     = ffi.typeof("struct { hid_t id; }")
 
 -- Object methods.
-local attribute = {}
-local dataset   = {}
-local dataspace = {}
-local datatype  = {}
-local file      = {}
-local group     = {}
-local location  = {}
-local object    = {}
-local plist     = {}
+local attribute  = {}
+local dataset    = {}
+local dataspace  = {}
+local datatype   = {}
+local file       = {}
+local group      = {}
+local identifier = {}
+local location   = {}
+local object     = {}
+local plist      = {}
 
+-- Compare header and library version.
+assert(C.H5check_version(C.H5_VERS_MAJOR, C.H5_VERS_MINOR, C.H5_VERS_RELEASE) == 0)
 -- Initialise HDF5 constants.
 assert(C.H5open() == 0)
--- Retain objects that reference a file when the file is closed.
-assert(C.H5Pset_fclose_degree(C.H5P_FILE_ACCESS_DEFAULT, C.H5F_CLOSE_WEAK) == 0)
+-- Raise an error when closing a file with open objects.
+assert(C.H5Pset_fclose_degree(C.H5P_FILE_ACCESS_DEFAULT, C.H5F_CLOSE_SEMI) == 0)
 -- Write files in HDF5 1.8 format by default.
 assert(C.H5Pset_libver_bounds(C.H5P_FILE_ACCESS_DEFAULT, C.H5F_LIBVER_18, C.H5F_LIBVER_LATEST) == 0)
 -- Create missing intermediate links by default.
@@ -71,16 +74,6 @@ local function get_error()
   cb:free()
   return desc
 end
-
--- Closes object identifier.
-local function close_id(object)
-  local err = C.H5Idec_ref(object.id)
-  if err < 0 then return error(get_error()) end
-  object.id = C.H5I_INVALID_HID
-end
-
--- Weak object identifier references.
-local objects = setmetatable({}, {__mode = "v"})
 
 -- Converts a bit-field to a table of boolean values.
 local function bittobool(b, map)
@@ -195,23 +188,6 @@ end
 function file.flush(file)
   local err = C.H5Fflush(file.id, C.H5F_SCOPE_LOCAL)
   if err < 0 then return error(get_error()) end
-end
-
-do
-  local types = bit.bor(C.H5F_OBJ_LOCAL, bit.bxor(C.H5F_OBJ_ALL, C.H5F_OBJ_FILE))
-
-  function file.close(file)
-    local size = C.H5Fget_obj_count(file.id, types)
-    if size < 0 then return error(get_error()) end
-    local id = hid_t_n(size)
-    local size = C.H5Fget_obj_ids(file.id, types, size, id)
-    if size < 0 then return error(get_error()) end
-    for i = 0, tonumber(size) - 1 do
-      local object = rawget(objects, id[i])
-      if object then close_id(ffi.gc(object, nil)) end
-    end
-    return close_id(ffi.gc(file, nil))
-  end
 end
 
 function group.create_group(group, name, lcpl, gcpl, gapl)
@@ -375,6 +351,31 @@ function location.delete_attribute(loc, name)
   if err < 0 then return error(get_error()) end
 end
 
+local index_types = {
+  name      = C.H5_INDEX_NAME,
+  crt_order = C.H5_INDEX_CRT_ORDER,
+}
+
+local iter_orders = {
+  inc    = C.H5_ITER_INC,
+  dec    = C.H5_ITER_DEC,
+  native = C.H5_ITER_NATIVE,
+}
+
+function location.get_attr_name_by_idx(loc, obj_name, n, index_type, order, lapl)
+  if index_type ~= nil then index_type = index_types[index_type] else index_type = C.H5_INDEX_NAME end
+  if order ~= nil then order = iter_orders[order] else order = C.H5_ITER_NATIVE end
+  if lapl ~= nil then lapl = lapl.id else lapl = C.H5P_DEFAULT end
+  local ret = C.H5Aget_name_by_idx(loc.id, obj_name, index_type, order, n, nil, 0, lapl)
+  if ret < 0 then return error(get_error()) end
+  if ret == 0 then return end
+  local size = tonumber(ret)
+  local name = char_n(size + 1)
+  local ret = C.H5Aget_name_by_idx(loc.id, obj_name, index_type, order, n, name, size + 1, lapl)
+  if ret < 0 then return error(get_error()) end
+  return ffi.string(name, size)
+end
+
 function attribute.get_name(attr)
   local ret = C.H5Aget_name(attr.id, 0, nil)
   if ret < 0 then return error(get_error()) end
@@ -485,6 +486,18 @@ do
     end
     return dims, maxdims
   end
+end
+
+function dataspace.get_simple_extent_ndims(space)
+  local ret = C.H5Sget_simple_extent_ndims(space.id)
+  if ret < 0 then return error(get_error()) end
+  return ret
+end
+
+function dataspace.get_simple_extent_npoints(space)
+  local ret = C.H5Sget_simple_extent_npoints(space.id)
+  if ret < 0 then return error(get_error()) end
+  return tonumber(ret)
 end
 
 function dataspace.extent_equal(space, space2)
@@ -612,16 +625,16 @@ do
   end
 end
 
-function datatype.get_size(dtype)
-  local size = C.H5Tget_size(dtype.id)
-  if size < 0 then return error(get_error()) end
-  return tonumber(size)
-end
-
 function datatype.set_size(dtype, size)
   if size == "variable" then size = C.H5T_VARIABLE end
   local err = C.H5Tset_size(dtype.id, size)
   if err < 0 then return error(get_error()) end
+end
+
+function datatype.get_size(dtype)
+  local size = C.H5Tget_size(dtype.id)
+  if size < 0 then return error(get_error()) end
+  return tonumber(size)
 end
 
 do
@@ -648,6 +661,28 @@ do
     if cset < 0 then return error(get_error()) end
     return csets[tonumber(cset)]
   end
+end
+
+function datatype.set_precision(dtype, precision)
+  local err = C.H5Tset_precision(dtype.id, precision)
+  if err < 0 then return error(get_error()) end
+end
+
+function datatype.get_precision(dtype)
+  local ret = C.H5Tget_precision(dtype.id)
+  if ret < 0 then return error(get_error()) end
+  return ret
+end
+
+function datatype.set_offset(dtype, offset)
+  local err = C.H5Tset_offset(dtype.id, offset)
+  if err < 0 then return error(get_error()) end
+end
+
+function datatype.get_offset(dtype)
+  local ret = C.H5Tget_offset(dtype.id)
+  if ret < 0 then return error(get_error()) end
+  return ret
 end
 
 function datatype.is_variable_str(dtype)
@@ -784,31 +819,18 @@ function group.delete_link(group, name, lapl)
   if err < 0 then return error(get_error()) end
 end
 
-do
-  local index_types = {
-    name      = C.H5_INDEX_NAME,
-    crt_order = C.H5_INDEX_CRT_ORDER,
-  }
-
-  local iter_orders = {
-    inc    = C.H5_ITER_INC,
-    dec    = C.H5_ITER_DEC,
-    native = C.H5_ITER_NATIVE,
-  }
-
-  function group.get_link_name_by_idx(group, group_name, n, index_type, order, lapl)
-    if index_type ~= nil then index_type = index_types[index_type] else index_type = C.H5_INDEX_NAME end
-    if order ~= nil then order = iter_orders[order] else order = C.H5_ITER_NATIVE end
-    if lapl ~= nil then lapl = lapl.id else lapl = C.H5P_DEFAULT end
-    local ret = C.H5Lget_name_by_idx(group.id, group_name, index_type, order, n, nil, 0, lapl)
-    if ret < 0 then return error(get_error()) end
-    if ret == 0 then return end
-    local size = tonumber(ret)
-    local name = char_n(size + 1)
-    local ret = C.H5Lget_name_by_idx(group.id, group_name, index_type, order, n, name, size + 1, lapl)
-    if ret < 0 then return error(get_error()) end
-    return ffi.string(name, size)
-  end
+function group.get_link_name_by_idx(group, group_name, n, index_type, order, lapl)
+  if index_type ~= nil then index_type = index_types[index_type] else index_type = C.H5_INDEX_NAME end
+  if order ~= nil then order = iter_orders[order] else order = C.H5_ITER_NATIVE end
+  if lapl ~= nil then lapl = lapl.id else lapl = C.H5P_DEFAULT end
+  local ret = C.H5Lget_name_by_idx(group.id, group_name, index_type, order, n, nil, 0, lapl)
+  if ret < 0 then return error(get_error()) end
+  if ret == 0 then return end
+  local size = tonumber(ret)
+  local name = char_n(size + 1)
+  local ret = C.H5Lget_name_by_idx(group.id, group_name, index_type, order, n, name, size + 1, lapl)
+  if ret < 0 then return error(get_error()) end
+  return ffi.string(name, size)
 end
 
 do
@@ -1047,8 +1069,8 @@ end
 
 if pcall(function() return C.H5Pset_fapl_mpio end) then
   function plist.set_fapl_mpio(fapl, comm, info)
-    if info ~= nil then info = info.id else info = ffi.cast("MPI_Info", C.MPI_INFO_NULL) end
-    local err = C.H5Pset_fapl_mpio(fapl.id, comm.id, info)
+    if info == nil then info = ffi.cast("MPI_Info", C.MPI_INFO_NULL) end
+    local err = C.H5Pset_fapl_mpio(fapl.id, comm, info)
     if err < 0 then return error(get_error()) end
   end
 end
@@ -1178,6 +1200,12 @@ do
     local err = C.H5Pset_link_creation_order(gcpl.id, flags)
     if err < 0 then return error(get_error()) end
   end
+
+  function plist.set_attr_creation_order(ocpl, flags)
+    flags = strtobit(flags, creation_order_flags)
+    local err = C.H5Pset_attr_creation_order(ocpl.id, flags)
+    if err < 0 then return error(get_error()) end
+  end
 end
 
 do
@@ -1189,6 +1217,13 @@ do
   function plist.get_link_creation_order(gcpl)
     local flags = unsigned_1()
     local err = C.H5Pget_link_creation_order(gcpl.id, flags)
+    if err < 0 then return error(get_error()) end
+    return bittobool(flags[0], creation_order_flags)
+  end
+
+  function plist.get_attr_creation_order(ocpl)
+    local flags = unsigned_1()
+    local err = C.H5Pget_attr_creation_order(ocpl.id, flags)
     if err < 0 then return error(get_error()) end
     return bittobool(flags[0], creation_order_flags)
   end
@@ -1213,8 +1248,10 @@ do
     expand_ext_link       = C.H5O_COPY_EXPAND_EXT_LINK_FLAG,
     expand_reference      = C.H5O_COPY_EXPAND_REFERENCE_FLAG,
     without_attr          = C.H5O_COPY_WITHOUT_ATTR_FLAG,
-    merge_committed_dtype = C.H5O_COPY_MERGE_COMMITTED_DTYPE_FLAG,
   }
+
+  local status, flag = pcall(function() return C.H5O_COPY_MERGE_COMMITTED_DTYPE_FLAG end)
+  if status then copy_flags.merge_committed_dtype = flag end
 
   function plist.set_copy_object(ocpypl, flags)
     flags = strtobit(flags, copy_flags)
@@ -1230,8 +1267,10 @@ do
     [C.H5O_COPY_EXPAND_EXT_LINK_FLAG]       = "expand_ext_link",
     [C.H5O_COPY_EXPAND_REFERENCE_FLAG]      = "expand_reference",
     [C.H5O_COPY_WITHOUT_ATTR_FLAG]          = "without_attr",
-    [C.H5O_COPY_MERGE_COMMITTED_DTYPE_FLAG] = "merge_committed_dtype",
   }
+
+  local status, flag = pcall(function() return C.H5O_COPY_MERGE_COMMITTED_DTYPE_FLAG end)
+  if status then copy_flags[flag] = "merge_committed_dtype" end
 
   function plist.get_copy_object(ocpypl)
     local flags = unsigned_1()
@@ -1241,27 +1280,33 @@ do
   end
 end
 
--- Inherit object methods.
-for name, f in pairs(object)   do attribute[name] = f end
-for name, f in pairs(object)   do location[name]  = f end
-for name, f in pairs(location) do dataset[name]   = f end
-for name, f in pairs(location) do group[name]     = f end
-for name, f in pairs(location) do datatype[name]  = f end
-for name, f in pairs(group)    do file[name]      = f end
-
--- Returns new object identifier.
-local function new_id(ctype, id)
-  local object = ffi.new(ctype, id)
-  rawset(objects, id, object)
-  return object
+local function close_id(object)
+  local err = C.H5Idec_ref(object.id)
+  if err < 0 then return error(get_error()) end
+  object.id = C.H5I_INVALID_HID
 end
 
-ffi.metatype(attribute_id, {__index = attribute, __gc = close_id, __new = new_id})
-ffi.metatype(dataset_id,   {__index = dataset,   __gc = close_id, __new = new_id})
-ffi.metatype(dataspace_id, {__index = dataspace, __gc = close_id, __new = new_id})
-ffi.metatype(datatype_id,  {__index = datatype,  __gc = close_id, __new = new_id})
-ffi.metatype(file_id,      {__index = file,      __gc = close_id, __new = new_id})
-ffi.metatype(group_id,     {__index = group,     __gc = close_id, __new = new_id})
-ffi.metatype(plist_id,     {__index = plist,     __gc = close_id, __new = new_id})
+function identifier.close(object)
+  return close_id(ffi.gc(object, nil))
+end
+
+-- Inherit object methods.
+for k, v in pairs(identifier) do object[k] = v end
+for k, v in pairs(identifier) do dataspace[k] = v end
+for k, v in pairs(identifier) do plist[k] = v end
+for k, v in pairs(object) do attribute[k] = v end
+for k, v in pairs(object) do location[k] = v end
+for k, v in pairs(location) do dataset[k] = v end
+for k, v in pairs(location) do group[k] = v end
+for k, v in pairs(location) do datatype[k] = v end
+for k, v in pairs(group) do file[k] = v end
+
+ffi.metatype(attribute_id, {__index = attribute, __gc = close_id})
+ffi.metatype(dataset_id,   {__index = dataset,   __gc = close_id})
+ffi.metatype(dataspace_id, {__index = dataspace, __gc = close_id})
+ffi.metatype(datatype_id,  {__index = datatype,  __gc = close_id})
+ffi.metatype(file_id,      {__index = file,      __gc = close_id})
+ffi.metatype(group_id,     {__index = group,     __gc = close_id})
+ffi.metatype(plist_id,     {__index = plist,     __gc = close_id})
 
 return _M

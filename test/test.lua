@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 -- Testing tools.
--- Copyright © 2013–2014 Peter Colberg.
+-- Copyright © 2013–2015 Peter Colberg.
 -- Distributed under the MIT license. (See accompanying file LICENSE.)
 ------------------------------------------------------------------------------
 
@@ -16,5 +16,7 @@ do
     return maj_ver > maj or maj_ver == maj and (min_ver > min or min_ver == min and rel_ver >= rel)
   end
 end
+
+assert(_M.require_version(1, 8, 0))
 
 return _M

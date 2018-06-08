@@ -70,10 +70,12 @@ Files
 
 `file:close()`
 
-  : Closes the file and all open objects that reference the file.
-    This function need only be called if a file should be immediately
-    closed; otherwise, the file will be closed when all objects that
-    reference the file have been garbage collected eventually.
+  : Closes the file. Any open objects in the file, which includes groups,
+    datasets, attributes and *committed* datatypes, must be closed before
+    closing the file itself; otherwise, this function raises an error.
+    If the file is not closed manually, it will be closed automatically
+    when it is garbage collected, where the same caveat of open objects
+    applies.
 
 
 Groups
@@ -108,10 +110,13 @@ Groups
 
     `info:get_num_links()`
       : Returns the number of links in the group.
+
     `info:get_max_corder()`
       : Returns the current maximum creation order value.
+
     `info:get_mounted()`
       : Returns **true** if a file is mounted onto the group; otherwise returns **false**.
+
     `info:get_storage_type()`
       : Returns the storage type for links in the group:
 
@@ -119,6 +124,10 @@ Groups
           - **"dense"**: indexed storage;
           - **"symbol_table"**: symbol tables.
 
+`group:close()`
+
+  : Closes the group. If the group is not closed manually, it will be
+    closed automatically when it is garbage collected.
 
 Datasets
 --------
@@ -215,6 +224,11 @@ Datasets
     the dataset or attribute. `dxpl` is the [dataset transfer properties]
     specified when the dataset was read.
 
+`dataset:close()`
+
+  : Closes the dataset. If the dataset is not closed manually, it will be
+    closed automatically when it is garbage collected.
+
 
 Attributes
 ----------
@@ -247,6 +261,23 @@ Attributes
 
   : Deletes the attribute with the given name.
 
+`loc:get_attr_name_by_idx(obj_name, n[, index_type[, order[, lapl]]])`
+
+  : Returns the name of the `n`-th attribute of the object with the given name,
+    where the attributes are ordered according to the given index type and order.
+    A fifth, optional argument `lapl` specifies the link access properties.
+
+    `index_type` may be one of the following values, to order attributes by
+
+      - **"name"**: attribute name (the default);
+      - **"crt_order"**: creation order.
+
+    `order` may be one of the following values, to order attributes in
+
+      - **"inc"**: increasing order;
+      - **"dec"**: decreasing order;
+      - **"native"**: fastest available order (the default).
+
 `attr:get_name()`
 
   : Returns the name of the attribute.
@@ -272,6 +303,11 @@ Attributes
     C array object. `mem_type` is a datatype that corresponds to the C type of
     the buffer; it must be [convertible][Datatype Conversion and Selection] to
     the datatype of the attribute.
+
+`attr:close()`
+
+  : Closes the attribute. If the attribute is not closed manually, it will be
+    closed automatically when it is garbage collected.
 
 
 Dataspaces
@@ -310,6 +346,14 @@ Dataspaces
   : Returns two tables that specify the current and maximum dimensions of the
     dataspace. For each dimension of unlimited maximum size, the corresponding
     element of the second table is **nil**.
+
+`space:get_simple_extent_ndims()`
+
+  : Returns the number of dimensions of the dataspace.
+
+`space:get_simple_extent_npoints()`
+
+  : Returns the number of elements of the dataspace.
 
 `space:extent_equal(space2)`
 
@@ -350,6 +394,11 @@ Dataspaces
   : Sets the offset of the selection of the dataspace. `offset` is a table with
     a sequence that specifies for each dimension the offset of the origin of
     the selected region relative to the origin of the dataspace.
+
+`space:close()`
+
+  : Closes the dataspace. If the dataspace is not closed manually, it will be
+    closed automatically when it is garbage collected.
 
 [Dataspaces and Data Transfer]: http://www.hdfgroup.org/HDF5/doc/UG/12_Dataspaces.html#Dtransfer
 
@@ -412,21 +461,26 @@ Datatypes
       - **"vlen"**: variable-length datatype;
       - **"array"**: array datatype.
 
-`dtype:get_size()`
-
-  : Returns the size in bytes of the datatype. If `dtype` is a variable-length
-    datatype, returns the size of a pointer to an element of that datatype.
-
-[Datatype Conversion and Selection]: http://www.hdfgroup.org/HDF5/doc/UG/11_Datatypes.html#Dtransfer
-
-
-### Atomic datatypes
-
 `dtype:set_size(size)`
 
   : Sets the size in bytes of the datatype. If `dtype` is a string datatype,
     `size` may be specified as **"variable"** to create a variable-length
     datatype.
+
+`dtype:get_size()`
+
+  : Returns the size in bytes of the datatype. If `dtype` is a variable-length
+    datatype, returns the size of a pointer to an element of that datatype.
+
+`dtype:close()`
+
+  : Closes the datatype. If the datatype is not closed manually, it will be
+    closed automatically when it is garbage collected.
+
+[Datatype Conversion and Selection]: http://www.hdfgroup.org/HDF5/doc/UG/11_Datatypes.html#Dtransfer
+
+
+### Atomic datatypes
 
 `dtype:set_cset(cset)`
 
@@ -439,6 +493,22 @@ Datatypes
 `dtype:get_cset()`
 
   : Returns the character encoding of a string datatype.
+
+`dtype:set_precision(precision)`
+
+  : Sets the number of significant bits.
+
+`dtype:get_precision()`
+
+  : Returns the number of significant bits.
+
+`dtype:set_offset(offset)`
+
+  : Sets the offset in bits of the first significant bit.
+
+`dtype:get_offset()`
+
+  : Returns the offset in bits of the first significant bit.
 
 
 ### Variable-length datatypes
@@ -507,14 +577,19 @@ The library defines the following atomic datatypes.
 +------------------------------------+------------------------------------+
 | `hdf5.char`                        | `hdf5.opaque`                      |
 |   : C type `char`                  |   : Opaque byte string             |
+|                                    |                                    |
 | `hdf5.schar`                       | `hdf5.uchar`                       |
 |   : C type `signed char`           |   : C type `unsigned char`         |
+|                                    |                                    |
 | `hdf5.short`                       | `hdf5.ushort`                      |
 |   : C type `short`                 |   : C type `unsigned short`        |
+|                                    |                                    |
 | `hdf5.int`                         | `hdf5.uint`                        |
 |   : C type `int`                   |   : C type `unsigned int`          |
+|                                    |                                    |
 | `hdf5.long`                        | `hdf5.ulong`                       |
 |   : C type `long`                  |   : C type `unsigned long`         |
+|                                    |                                    |
 | `hdf5.llong`                       | `hdf5.ullong`                      |
 |   : C type `long long`             |   : C type `unsigned long long`    |
 +------------------------------------+------------------------------------+
@@ -522,10 +597,13 @@ The library defines the following atomic datatypes.
 +------------------------------------+------------------------------------+
 | `hdf5.int8`                        | `hdf5.uint8`                       |
 |   : C type `int8_t`                |   : C type `uint8_t`               |
+|                                    |                                    |
 | `hdf5.int16`                       | `hdf5.uint16`                      |
 |   : C type `int16_t`               |   : C type `uint16_t`              |
+|                                    |                                    |
 | `hdf5.int32`                       | `hdf5.uint32`                      |
 |   : C type `int32_t`               |   : C type `uint32_t`              |
+|                                    |                                    |
 | `hdf5.int64`                       | `hdf5.uint64`                      |
 |   : C type `int64_t`               |   : C type `uint64_t`              |
 +------------------------------------+------------------------------------+
@@ -533,18 +611,25 @@ The library defines the following atomic datatypes.
 +------------------------------------+------------------------------------+
 | `hdf5.i8be`                        | `hdf5.u8be`                        |
 |   : Signed 8 bit big-endian        |   : Unsigned 8 bit big-endian      |
+|                                    |                                    |
 | `hdf5.i8le`                        | `hdf5.u8le`                        |
 |   : Signed 8 bit little-endian     |   : Unsigned 8 bit little-endian   |
+|                                    |                                    |
 | `hdf5.i16be`                       | `hdf5.u16be`                       |
 |   : Signed 16 bit big-endian       |   : Unsigned 16 bit big-endian     |
+|                                    |                                    |
 | `hdf5.i16le`                       | `hdf5.u16le`                       |
 |   : Signed 16 bit little-endian    |   : Unsigned 16 bit little-endian  |
+|                                    |                                    |
 | `hdf5.i32be`                       | `hdf5.u32be`                       |
 |   : Signed 32 bit big-endian       |   : Unsigned 32 bit big-endian     |
+|                                    |                                    |
 | `hdf5.i32le`                       | `hdf5.u32le`                       |
 |   : Signed 32 bit little-endian    |   : Unsigned 32 bit little-endian  |
+|                                    |                                    |
 | `hdf5.i64be`                       | `hdf5.u64be`                       |
 |   : Signed 64 bit big-endian       |   : Unsigned 64 bit big-endian     |
+|                                    |                                    |
 | `hdf5.i64le`                       | `hdf5.u64le`                       |
 |   : Signed 64 bit little-endian    |   : Unsigned 64 bit little-endian  |
 +------------------------------------+------------------------------------+
@@ -554,6 +639,7 @@ The library defines the following atomic datatypes.
 +------------------------------------+------------------------------------+
 | `hdf5.b8`                          | `hdf5.b16`                         |
 |   : 1 byte bit field               |   : 2 byte bit field               |
+|                                    |                                    |
 | `hdf5.b32`                         | `hdf5.b64`                         |
 |   : 4 byte bit field               |   : 8 byte bit field               |
 +------------------------------------+------------------------------------+
@@ -561,10 +647,13 @@ The library defines the following atomic datatypes.
 +------------------------------------+------------------------------------+
 | `hdf5.b8be`                        | `hdf5.b8le`                        |
 |   : 8 bit big-endian               |   : 8 bit little-endian            |
+|                                    |                                    |
 | `hdf5.b16be`                       | `hdf5.b16le`                       |
 |   : 16 bit big-endian              |   : 16 bit little-endian           |
+|                                    |                                    |
 | `hdf5.b32be`                       | `hdf5.b32le`                       |
 |   : 32 bit big-endian              |   : 32 bit little-endian           |
+|                                    |                                    |
 | `hdf5.b64be`                       | `hdf5.b64le`                       |
 |   : 64 bit big-endian              |   : 64 bit little-endian           |
 +------------------------------------+------------------------------------+
@@ -579,6 +668,7 @@ The library defines the following atomic datatypes.
 +------------------------------------+------------------------------------+
 | `hdf5.f32be`                       | `hdf5.f32le`                       |
 |   : 32 bit big-endian              |   : 32 bit little-endian           |
+|                                    |                                    |
 | `hdf5.f64be`                       | `hdf5.f64le`                       |
 |   : 64 bit big-endian              |   : 64 bit little-endian           |
 +------------------------------------+------------------------------------+
@@ -701,16 +791,22 @@ Objects
 
     `info:get_atime()`
       : Returns the last time the object was read or written.
+
     `info:get_mtime()`
       : Returns the last time the raw data in the object was changed.
+
     `info:get_ctime()`
       : Returns the last time the metadata for the object was changed.
+
     `info:get_btime()`
       : Returns the time the object was created.
+
     `info:get_num_links()`
       : Returns the number of links to the object.
+
     `info:get_num_attrs()`
       : Returns the number of attributes.
+
     `info:get_type()`
       : Returns the type of the object, which can be any of the following:
 
@@ -786,6 +882,11 @@ Property lists
       - **"object_copy"**: object copying properties;
       - **"link_create"**: [link creation properties];
       - **"link_access"**: link access properties.
+
+`plist:close()`
+
+  : Closes the property list. If the property list is not closed manually,
+    it will be closed automatically when it is garbage collected.
 
 
 ### File creation properties
@@ -965,6 +1066,26 @@ Property lists
   : Returns a table with the link creation order flags (**true** or **nil**).
 
 [group creation properties]: #group-creation-properties
+
+
+### Object creation properties
+
+`ocpl:set_attr_creation_order(flags)`
+
+  : Sets creation order tracking and indexing of attributes of an object.
+
+    `flags` can be one or a sequence of the following:
+
+      - **"tracked"**: attribute creation order is tracked;
+      - **"indexed"**: attribute creation order is indexed (requires **"tracked"**).
+
+    By default attribute creation order is neither tracked nor indexed.
+
+`ocpl:get_attr_creation_order()`
+
+  : Returns a table with the attribute creation order flags (**true** or **nil**).
+
+[object creation properties]: #object-creation-properties
 
 
 ### Link creation properties
